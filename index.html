@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07111f">
+<title>RG12 Live Aircraft</title>
+<style>
+:root{
+  --bg:#07111f;
+  --panel:#0d1b2b;
+  --panel-2:#11253a;
+  --line:#28425a;
+  --text:#f6f8fb;
+  --muted:#9bb0c2;
+  --cyan:#48d8ff;
+  --green:#3be69b;
+  --amber:#ffc857;
+  --red:#ff7272;
+  --shadow:0 18px 50px rgba(0,0,0,.42);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:
+radial-gradient(circle at 20% -10%,#173953 0,#0b1725 35%,#050b13 100%);
+color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button{font:inherit}
+.app{max-width:1600px;margin:auto;padding:18px}
+
+.topbar{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  align-items:center;
+  gap:18px;
+  margin-bottom:16px;
+}
+.brand{display:flex;align-items:center;gap:14px}
+.brandmark{
+  width:64px;height:64px;border-radius:18px;
+  display:grid;place-items:center;
+  background:linear-gradient(145deg,#1b4262,#0a1928);
+  border:1px solid #315b7c;
+  box-shadow:var(--shadow);
+}
+.brandmark svg{width:38px;fill:var(--cyan)}
+.brand h1{margin:0;font-size:clamp(24px,4vw,42px);line-height:1;letter-spacing:.01em}
+.brand p{margin:7px 0 0;color:var(--muted);font-size:14px}
+.clock{text-align:right}
+.clock .time{font-size:clamp(28px,4vw,44px);font-weight:900;letter-spacing:.03em}
+.clock .date{font-size:13px;color:var(--muted);margin-top:2px}
+.live-pill{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 15px;border-radius:999px;
+  border:1px solid #2d506b;background:#0a1929;
+  font-weight:800;white-space:nowrap;
+}
+.live-dot{width:11px;height:11px;border-radius:50%;background:var(--amber);box-shadow:0 0 14px currentColor}
+.live-dot.ok{background:var(--green);color:var(--green)}
+.live-dot.bad{background:var(--red);color:var(--red)}
+
+.hero-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.35fr) minmax(380px,.65fr);
+  gap:16px;
+}
+.card{
+  background:linear-gradient(160deg,rgba(18,39,60,.96),rgba(8,21,34,.97));
+  border:1px solid #1f3d56;border-radius:22px;
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.card-head{
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding:17px 20px;border-bottom:1px solid var(--line);
+  background:rgba(8,20,33,.72);
+}
+.card-title{
+  font-size:13px;font-weight:900;text-transform:uppercase;
+  letter-spacing:.1em;color:#dce8f2;
+}
+.card-sub{font-size:12px;color:var(--muted);margin-top:4px}
+.refresh{
+  border:1px solid #325675;background:#11304a;color:white;
+  border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer;
+}
+.refresh:active{transform:translateY(1px)}
+
+.radar{
+  position:relative;
+  min-height:560px;
+  overflow:hidden;
+  background:
+  radial-gradient(circle at center,transparent 0 16.4%,#36587566 16.7% 17%,transparent 17.3% 32.8%,#36587566 33% 33.3%,transparent 33.6% 49.3%,#36587566 49.6% 49.9%,transparent 50.2%),
+  linear-gradient(90deg,transparent 49.8%,#36587555 50%,transparent 50.2%),
+  linear-gradient(transparent 49.8%,#36587555 50%,transparent 50.2%),
+  radial-gradient(circle at center,#153548 0,#0a1a27 70%,#07131e 100%);
+}
+.radar:after{
+  content:"";position:absolute;inset:-50%;pointer-events:none;
+  background:conic-gradient(from 0deg,transparent 0 83%,rgba(72,216,255,.07) 90%,rgba(72,216,255,.42) 99%,transparent 100%);
+  animation:sweep 6s linear infinite;transform-origin:center;
+}
+@keyframes sweep{to{transform:rotate(360deg)}}
+.home{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:18px;height:18px;border-radius:50%;border:3px solid white;
+  box-shadow:0 0 0 7px rgba(72,216,255,.22),0 0 24px var(--cyan);z-index:4;
+}
+.range{position:absolute;color:#7791a7;font-size:11px;font-weight:800}
+.range.r1{left:50%;top:33%}.range.r2{left:50%;top:17%}.range.r3{left:50%;top:2%}
+.legend{
+  position:absolute;left:16px;bottom:15px;z-index:5;
+  padding:10px 12px;border-radius:12px;border:1px solid #2b4b65;
+  background:rgba(6,17,29,.86);font-size:12px;color:var(--muted);line-height:1.45
+}
+.marker{
+  position:absolute;z-index:5;transform:translate(-50%,-50%);
+  border:0;background:transparent;color:white;cursor:pointer;padding:8px;
+}
+.marker svg{
+  width:30px;height:30px;fill:var(--cyan);
+  filter:drop-shadow(0 0 8px var(--cyan));
+  transition:.2s;
+}
+.marker.selected svg{fill:var(--amber);filter:drop-shadow(0 0 10px var(--amber));transform:scale(1.18)}
+.marker-label{
+  position:absolute;left:37px;top:5px;white-space:nowrap;
+  background:rgba(5,14,24,.92);border:1px solid #33536e;border-radius:7px;
+  padding:4px 6px;font-size:11px;font-weight:900;
+}
+
+.featured{
+  min-height:560px;display:flex;flex-direction:column;
+}
+.photo-wrap{
+  position:relative;height:230px;overflow:hidden;background:#06111d;
+}
+.photo-wrap img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  filter:saturate(.95) contrast(1.03) brightness(.84);
+}
+.photo-wrap:after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(to top,rgba(6,17,29,.92),rgba(6,17,29,.05) 55%,rgba(6,17,29,.15));
+}
+.photo-tag{
+  position:absolute;left:18px;bottom:16px;z-index:2;
+  padding:7px 10px;border-radius:9px;background:rgba(4,13,22,.75);
+  border:1px solid rgba(255,255,255,.18);font-size:11px;font-weight:800;
+}
+.flight-head{display:flex;gap:16px;align-items:center;padding:18px 20px;border-bottom:1px solid var(--line)}
+.airline-logo{
+  width:84px;height:84px;border-radius:18px;background:white;
+  display:grid;place-items:center;overflow:hidden;flex:0 0 auto;
+}
+.airline-logo img{max-width:88%;max-height:64%;object-fit:contain}
+.logo-fallback{color:#082039;font-size:25px;font-weight:900}
+.flight-code{font-size:34px;font-weight:950;letter-spacing:.05em}
+.airline-name{color:var(--cyan);font-weight:800;margin-top:4px;font-size:16px}
+.type-text{color:var(--muted);font-size:13px;margin-top:6px}
+
+.metrics{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);
+}
+.metric{background:#0b1b2a;padding:16px 18px}
+.metric-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.metric-value{font-size:25px;font-weight:900;margin-top:5px}
+.metric-value.cyan{color:var(--cyan)}
+.metric-value.green{color:var(--green)}
+.connection{
+  margin-top:auto;padding:16px 20px;background:#081522;border-top:1px solid var(--line)
+}
+.connection-row{display:flex;justify-content:space-between;gap:12px;margin:6px 0;font-size:12px}
+.connection-row span{color:var(--muted)}
+
+.list-card{margin-top:16px}
+.list-head{
+  display:grid;grid-template-columns:1.35fr 1.4fr 1fr .8fr .8fr .8fr;
+  padding:11px 18px;background:#091827;color:#88a2b7;
+  font-size:10px;text-transform:uppercase;letter-spacing:.09em;font-weight:900;
+}
+.aircraft-row{
+  display:grid;grid-template-columns:1.35fr 1.4fr 1fr .8fr .8fr .8fr;
+  gap:8px;align-items:center;padding:13px 18px;
+  border-top:1px solid #19344b;cursor:pointer;transition:.15s;
+}
+.aircraft-row:hover,.aircraft-row.active{background:#12304a}
+.flight-cell{font-size:18px;font-weight:900}
+.airline-cell{color:#cfe0ee}
+.data-main{font-weight:800}
+.data-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.empty{padding:50px 20px;text-align:center;color:var(--muted)}
+.footer-note{
+  margin-top:14px;text-align:center;color:#7890a4;font-size:11px;line-height:1.45
+}
+
+@media(max-width:1050px){
+  .hero-grid{grid-template-columns:1fr}
+  .radar,.featured{min-height:500px}
+}
+@media(max-width:760px){
+  .app{padding:10px}
+  .topbar{grid-template-columns:1fr auto}.clock{display:none}.live-pill{grid-column:1/-1;justify-content:center}
+  .radar{min-height:420px}
+  .list-head{display:none}
+  .aircraft-row{
+    grid-template-columns:1fr 1fr 1fr;
+    padding:15px;
+  }
+  .airline-cell{grid-column:1/-1}
+}
+@media(max-width:480px){
+  .brandmark{width:54px;height:54px}.brand h1{font-size:25px}
+  .radar{min-height:380px}
+  .photo-wrap{height:190px}
+  .flight-code{font-size:29px}
+  .airline-logo{width:70px;height:70px}
+  .metric-value{font-size:22px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brandmark">
+        <svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5L21 16z"/></svg>
+      </div>
+      <div>
+        <h1>RG12 Live Aircraft</h1>
+        <p>Aircraft within 15 miles of RG12 0SF • automatic refresh every 10 seconds</p>
+      </div>
+    </div>
+    <div class="clock">
+      <div id="clockTime" class="time">--:--</div>
+      <div id="clockDate" class="date">Loading date</div>
+    </div>
+    <div class="live-pill">
+      <span id="liveDot" class="live-dot"></span>
+      <span id="liveText">Connecting to live aircraft feed</span>
+    </div>
+  </header>
+
+  <section class="hero-grid">
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Live radar</div>
+          <div id="updatedText" class="card-sub">Waiting for live data</div>
+        </div>
+        <button id="refreshBtn" class="refresh">Refresh now</button>
+      </div>
+      <div id="radar" class="radar">
+        <div class="range r1">5 MI</div>
+        <div class="range r2">10 MI</div>
+        <div class="range r3">15 MI</div>
+        <div class="home" title="RG12 0SF"></div>
+        <div class="legend">Centre: RG12 0SF<br>North is up</div>
+      </div>
+    </div>
+
+    <aside class="card featured">
+      <div class="photo-wrap">
+        <img id="aircraftPhoto"
+             src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85"
+             alt="Aircraft">
+        <div class="photo-tag">LIVE AIRCRAFT PROFILE</div>
+      </div>
+
+      <div class="flight-head">
+        <div class="airline-logo">
+          <img id="airlineLogo" alt="">
+          <div id="logoFallback" class="logo-fallback">✈</div>
+        </div>
+        <div>
+          <div id="callsign" class="flight-code">SEARCHING</div>
+          <div id="airline" class="airline-name">Finding nearby aircraft…</div>
+          <div id="aircraftType" class="type-text">Live ADS-B data</div>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Distance</div>
+          <div id="distance" class="metric-value cyan">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Speed</div>
+          <div id="speed" class="metric-value green">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Altitude</div>
+          <div id="altitude" class="metric-value">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Heading</div>
+          <div id="heading" class="metric-value">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Registration</div>
+          <div id="registration" class="metric-value">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">ICAO hex</div>
+          <div id="hex" class="metric-value">—</div>
+        </div>
+      </div>
+
+      <div class="connection">
+        <div class="connection-row"><span>Live data source</span><strong id="sourceName">Connecting</strong></div>
+        <div class="connection-row"><span>Aircraft detected</span><strong id="aircraftCount">0</strong></div>
+        <div class="connection-row"><span>Next refresh</span><strong id="countdown">—</strong></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="card list-card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Nearby aircraft</div>
+        <div class="card-sub">Tap any row to feature that aircraft</div>
+      </div>
+    </div>
+    <div class="list-head">
+      <div>Flight</div><div>Airline</div><div>Registration</div><div>Distance</div><div>Altitude</div><div>Speed</div>
+    </div>
+    <div id="aircraftList">
+      <div class="empty">Establishing a live connection…</div>
+    </div>
+  </section>
+
+  <div class="footer-note">
+    Browser-only version with no Cloudflare Worker. Live aircraft data automatically tries ADSB.lol, Airplanes.live and OpenSky Network.
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const HOME = { lat: 51.4168, lon: -0.7496 };
+const RADIUS_MI = 15;
+const REFRESH_SECONDS = 10;
+const REQUEST_TIMEOUT = 9000;
+
+const airlineMap = {
+  BAW:{name:'British Airways',domain:'britishairways.com'},
+  SHT:{name:'British Airways',domain:'britishairways.com'},
+  VIR:{name:'Virgin Atlantic',domain:'virginatlantic.com'},
+  EZY:{name:'easyJet',domain:'easyjet.com'},
+  RYR:{name:'Ryanair',domain:'ryanair.com'},
+  TOM:{name:'TUI Airways',domain:'tui.co.uk'},
+  TUI:{name:'TUI Airways',domain:'tui.co.uk'},
+  WZZ:{name:'Wizz Air',domain:'wizzair.com'},
+  LOG:{name:'Loganair',domain:'loganair.co.uk'},
+  EXS:{name:'Jet2',domain:'jet2.com'},
+  KLM:{name:'KLM',domain:'klm.com'},
+  AFR:{name:'Air France',domain:'airfrance.com'},
+  DLH:{name:'Lufthansa',domain:'lufthansa.com'},
+  SWR:{name:'SWISS',domain:'swiss.com'},
+  EIN:{name:'Aer Lingus',domain:'aerlingus.com'},
+  UAE:{name:'Emirates',domain:'emirates.com'},
+  QTR:{name:'Qatar Airways',domain:'qatarairways.com'},
+  ETD:{name:'Etihad Airways',domain:'etihad.com'},
+  THY:{name:'Turkish Airlines',domain:'turkishairlines.com'},
+  SAS:{name:'SAS',domain:'flysas.com'},
+  FIN:{name:'Finnair',domain:'finnair.com'},
+  IBE:{name:'Iberia',domain:'iberia.com'},
+  TAP:{name:'TAP Air Portugal',domain:'flytap.com'},
+  AAL:{name:'American Airlines',domain:'aa.com'},
+  UAL:{name:'United Airlines',domain:'united.com'},
+  DAL:{name:'Delta Air Lines',domain:'delta.com'},
+  ACA:{name:'Air Canada',domain:'aircanada.com'},
+  SIA:{name:'Singapore Airlines',domain:'singaporeair.com'},
+  CPA:{name:'Cathay Pacific',domain:'cathaypacific.com'},
+  QFA:{name:'Qantas',domain:'qantas.com'},
+  ANA:{name:'All Nippon Airways',domain:'ana.co.jp'},
+  JAL:{name:'Japan Airlines',domain:'jal.com'},
+  BCS:{name:'DHL Aviation',domain:'dhl.com'},
+  FDX:{name:'FedEx',domain:'fedex.com'},
+  UPS:{name:'UPS Airlines',domain:'ups.com'}
+};
+
+const typePhotos = {
+  A320:'https://images.unsplash.com/photo-1542296332-2e4473faf563?auto=format&fit=crop&w=1400&q=85',
+  A321:'https://images.unsplash.com/photo-1542296332-2e4473faf563?auto=format&fit=crop&w=1400&q=85',
+  A319:'https://images.unsplash.com/photo-1542296332-2e4473faf563?auto=format&fit=crop&w=1400&q=85',
+  A350:'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85',
+  A380:'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85',
+  B737:'https://images.unsplash.com/photo-1540962351504-03099e0a754b?auto=format&fit=crop&w=1400&q=85',
+  B738:'https://images.unsplash.com/photo-1540962351504-03099e0a754b?auto=format&fit=crop&w=1400&q=85',
+  B739:'https://images.unsplash.com/photo-1540962351504-03099e0a754b?auto=format&fit=crop&w=1400&q=85',
+  B744:'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85',
+  B748:'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85',
+  B772:'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85',
+  B773:'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85',
+  B788:'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85',
+  B789:'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85'
+};
+
+const fallbackPhoto = 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1400&q=85';
+
+const $ = id => document.getElementById(id);
+let aircraft = [];
+let selectedHex = null;
+let countdown = REFRESH_SECONDS;
+let loading = false;
+let refreshTimer;
+let countdownTimer;
+
+function tickClock(){
+  const now=new Date();
+  $('clockTime').textContent=now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  $('clockDate').textContent=now.toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});
+}
+tickClock(); setInterval(tickClock,1000);
+
+function toRad(v){return v*Math.PI/180}
+function distanceMiles(lat1,lon1,lat2,lon2){
+  const R=3958.7613,dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function bearing(lat1,lon1,lat2,lon2){
+  const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));
+  const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function compass(deg){
+  if(!Number.isFinite(deg)) return '—';
+  return ['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8]+' '+Math.round(deg)+'°';
+}
+function airlineInfo(call){
+  const code=(call||'').trim().toUpperCase();
+  return airlineMap[code.slice(0,3)]||{name:code?'Operator not identified':'Unknown operator',domain:null};
+}
+function setLive(state,text){
+  $('liveDot').className='live-dot '+state;
+  $('liveText').textContent=text;
+}
+async function fetchJSON(url){
+  let lastError;
+  for(let attempt=0;attempt<2;attempt++){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT);
+    try{
+      const response=await fetch(url,{cache:'no-store',mode:'cors',signal:controller.signal,headers:{Accept:'application/json'}});
+      clearTimeout(timer);
+      if(!response.ok) throw new Error('HTTP '+response.status);
+      return await response.json();
+    }catch(err){
+      clearTimeout(timer);lastError=err;
+      await new Promise(r=>setTimeout(r,700));
+    }
+  }
+  throw lastError;
+}
+function normalizeAdsb(data){
+  const list=Array.isArray(data?.ac)?data.ac:Array.isArray(data?.aircraft)?data.aircraft:[];
+  return list.map(a=>({
+    hex:(a.hex||a.icao||'').replace('~','').toUpperCase(),
+    callsign:(a.flight||a.callsign||'').trim(),
+    registration:a.r||a.registration||'',
+    type:a.t||a.type||a.desc||'',
+    lat:Number(a.lat),lon:Number(a.lon),
+    altitude:Number(a.alt_baro==='ground'?0:(a.alt_baro??a.alt_geom??a.altitude)),
+    speed:Number(a.gs??a.speed),
+    track:Number(a.track??a.heading)
+  })).filter(a=>Number.isFinite(a.lat)&&Number.isFinite(a.lon));
+}
+function normalizeOpenSky(data){
+  if(!Array.isArray(data?.states)) return [];
+  return data.states.map(s=>({
+    hex:String(s[0]||'').toUpperCase(),
+    callsign:String(s[1]||'').trim(),
+    registration:'',
+    type:'',
+    lat:Number(s[6]),lon:Number(s[5]),
+    altitude:Number(s[13]??s[7]),
+    speed:Number.isFinite(Number(s[9]))?Number(s[9])*1.943844:NaN,
+    track:Number(s[10])
+  })).filter(a=>Number.isFinite(a.lat)&&Number.isFinite(a.lon));
+}
+function bbox(){
+  const latDelta=RADIUS_MI/69;
+  const lonDelta=RADIUS_MI/(69*Math.cos(toRad(HOME.lat)));
+  return {lamin:HOME.lat-latDelta,lamax:HOME.lat+latDelta,lomin:HOME.lon-lonDelta,lomax:HOME.lon+lonDelta};
+}
+async function getAircraft(){
+  const b=bbox();
+  const sources=[
+    {name:'ADSB.lol',url:`https://api.adsb.lol/v2/point/${HOME.lat}/${HOME.lon}/${RADIUS_MI}`,parse:normalizeAdsb},
+    {name:'Airplanes.live',url:`https://api.airplanes.live/v2/point/${HOME.lat}/${HOME.lon}/${RADIUS_MI}`,parse:normalizeAdsb},
+    {name:'OpenSky Network',url:`https://opensky-network.org/api/states/all?lamin=${b.lamin}&lomin=${b.lomin}&lamax=${b.lamax}&lomax=${b.lomax}`,parse:normalizeOpenSky}
+  ];
+  for(const source of sources){
+    try{
+      $('sourceName').textContent='Trying '+source.name;
+      const data=await fetchJSON(source.url);
+      const items=source.parse(data)
+        .map(a=>({...a,distance:distanceMiles(HOME.lat,HOME.lon,a.lat,a.lon),bearing:bearing(HOME.lat,HOME.lon,a.lat,a.lon)}))
+        .filter(a=>a.distance<=RADIUS_MI)
+        .sort((a,b)=>a.distance-b.distance);
+      if(items.length) return {source:source.name,items};
+    }catch(_){}
+  }
+  throw new Error('No direct feed available');
+}
+function saveCache(source,items){
+  try{localStorage.setItem('rg12-aircraft-cache',JSON.stringify({time:Date.now(),source,items}))}catch(_){}
+}
+function readCache(){
+  try{return JSON.parse(localStorage.getItem('rg12-aircraft-cache')||'null')}catch(_){return null}
+}
+function setPhoto(type){
+  const key=String(type||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const exact=typePhotos[key];
+  const family=Object.keys(typePhotos).find(k=>key.startsWith(k));
+  $('aircraftPhoto').src=exact||typePhotos[family]||fallbackPhoto;
+}
+function display(a){
+  if(!a)return;
+  selectedHex=a.hex;
+  const info=airlineInfo(a.callsign);
+  $('callsign').textContent=a.callsign||a.registration||a.hex||'UNKNOWN';
+  $('airline').textContent=info.name;
+  $('aircraftType').textContent=a.type||'Aircraft type not transmitted';
+  $('distance').textContent=a.distance.toFixed(1)+' mi';
+  $('speed').textContent=Number.isFinite(a.speed)?Math.round(a.speed*1.150779)+' mph':'—';
+  $('altitude').textContent=Number.isFinite(a.altitude)?Math.round(a.altitude).toLocaleString()+' ft':'—';
+  $('heading').textContent=compass(a.track);
+  $('registration').textContent=a.registration||'—';
+  $('hex').textContent=a.hex||'—';
+  setPhoto(a.type);
+
+  const img=$('airlineLogo'),fallback=$('logoFallback');
+  img.style.display='none';fallback.style.display='grid';
+  fallback.textContent=info.name.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
+  if(info.domain){
+    img.onload=()=>{img.style.display='block';fallback.style.display='none'};
+    img.onerror=()=>{img.style.display='none';fallback.style.display='grid'};
+    img.src='https://logo.clearbit.com/'+info.domain+'?size=180';
+  }else{
+    img.removeAttribute('src');
+  }
+  renderRadar();renderList();
+}
+function renderRadar(){
+  const radar=$('radar');
+  radar.querySelectorAll('.marker').forEach(x=>x.remove());
+  aircraft.forEach(a=>{
+    const radius=Math.min(a.distance/RADIUS_MI,1)*46;
+    const angle=toRad(a.bearing-90);
+    const x=50+Math.cos(angle)*radius;
+    const y=50+Math.sin(angle)*radius;
+    const btn=document.createElement('button');
+    btn.className='marker'+(a.hex===selectedHex?' selected':'');
+    btn.style.left=x+'%';btn.style.top=y+'%';
+    btn.innerHTML=`<svg viewBox="0 0 24 24" style="transform:rotate(${Number.isFinite(a.track)?a.track:0}deg)"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5L21 16z"/></svg><span class="marker-label">${a.callsign||a.registration||a.hex||'AIRCRAFT'}</span>`;
+    btn.onclick=()=>display(a);
+    radar.appendChild(btn);
+  });
+}
+function renderList(){
+  const list=$('aircraftList');
+  if(!aircraft.length){
+    list.innerHTML='<div class="empty">No aircraft currently detected within 15 miles.</div>';
+    return;
+  }
+  list.innerHTML='';
+  aircraft.forEach(a=>{
+    const info=airlineInfo(a.callsign);
+    const row=document.createElement('div');
+    row.className='aircraft-row'+(a.hex===selectedHex?' active':'');
+    row.innerHTML=`
+      <div><div class="flight-cell">${a.callsign||'Unknown'}</div><div class="data-sub">${a.type||'Type unavailable'}</div></div>
+      <div class="airline-cell">${info.name}</div>
+      <div><div class="data-main">${a.registration||'—'}</div><div class="data-sub">${a.hex||'—'}</div></div>
+      <div><div class="data-main">${a.distance.toFixed(1)} mi</div><div class="data-sub">from RG12</div></div>
+      <div><div class="data-main">${Number.isFinite(a.altitude)?Math.round(a.altitude).toLocaleString()+' ft':'—'}</div><div class="data-sub">${compass(a.track)}</div></div>
+      <div><div class="data-main">${Number.isFinite(a.speed)?Math.round(a.speed*1.150779)+' mph':'—'}</div><div class="data-sub">ground speed</div></div>`;
+    row.onclick=()=>display(a);
+    list.appendChild(row);
+  });
+}
+function startCountdown(){
+  clearInterval(countdownTimer);clearTimeout(refreshTimer);
+  countdown=REFRESH_SECONDS;
+  $('countdown').textContent=countdown+'s';
+  countdownTimer=setInterval(()=>{
+    countdown--;
+    $('countdown').textContent=Math.max(countdown,0)+'s';
+    if(countdown<=0)clearInterval(countdownTimer);
+  },1000);
+  refreshTimer=setTimeout(refresh,REFRESH_SECONDS*1000);
+}
+async function refresh(){
+  if(loading)return;
+  loading=true;
+  $('refreshBtn').disabled=true;
+  setLive('','Connecting to live aircraft feed');
+  try{
+    const result=await getAircraft();
+    aircraft=result.items;
+    $('sourceName').textContent=result.source;
+    $('aircraftCount').textContent=aircraft.length;
+    $('updatedText').textContent='Updated '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    setLive('ok','Live connection • '+result.source);
+    saveCache(result.source,aircraft);
+    display(aircraft.find(x=>x.hex===selectedHex)||aircraft[0]);
+  }catch(err){
+    const cache=readCache();
+    if(cache&&Array.isArray(cache.items)&&cache.items.length){
+      aircraft=cache.items;
+      $('sourceName').textContent='Saved data • retrying live feed';
+      $('aircraftCount').textContent=aircraft.length;
+      $('updatedText').textContent='Last live update '+new Date(cache.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      setLive('bad','Live feed retrying');
+      display(aircraft[0]);
+    }else{
+      aircraft=[];renderRadar();renderList();
+      $('sourceName').textContent='Automatic retry scheduled';
+      $('updatedText').textContent='Unable to connect • retrying in 10 seconds';
+      setLive('bad','Live feed retrying');
+    }
+  }finally{
+    loading=false;$('refreshBtn').disabled=false;startCountdown();
+  }
+}
+$('refreshBtn').addEventListener('click',()=>{clearTimeout(refreshTimer);clearInterval(countdownTimer);refresh()});
+window.addEventListener('online',refresh);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+refresh();
+})();
+</script>
+</body>
+</html>
