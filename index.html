@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#02070c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Bracknell Live Air Traffic v6</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --bg:#02070c;--panel:#07131d;--panel2:#0a1a26;--line:#213747;
+  --text:#f4f8fb;--muted:#91a4b5;--amber:#ffc42d;--green:#59e46f;
+  --blue:#62b7ff;--red:#ff6b6b;--brand:#62b7ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
+body{overflow:auto}
+.app{min-height:100vh;padding:12px;display:grid;grid-template-rows:auto 1fr auto;gap:10px}
+header{
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;
+  border-bottom:2px solid var(--amber);padding:2px 8px 10px
+}
+.time{font-size:clamp(20px,2.3vw,38px);font-weight:900;letter-spacing:1px}
+.date{color:var(--muted);font-size:clamp(10px,1vw,15px);margin-top:3px}
+.weather-top{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:14px}
+.title{text-align:center}
+.title h1{margin:0;font-size:clamp(24px,3.2vw,48px);letter-spacing:2px}
+.title p{margin:4px 0 0;color:var(--blue);font-size:clamp(12px,1.4vw,20px);font-weight:800;letter-spacing:1.5px}
+.status{text-align:right}.status .ok{color:var(--green);font-weight:900}.status .bad{color:var(--red);font-weight:900}
+.status small{display:block;color:var(--muted);margin-top:4px}
+.dashboard{display:grid;grid-template-columns:minmax(300px,.92fr) minmax(430px,1.08fr) minmax(320px,.92fr);gap:10px;min-height:0}
+.col{display:grid;gap:10px;align-content:start}
+.panel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.panel-title{height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--line);font-weight:900;letter-spacing:.6px}
+.panel-title span:last-child{font-size:12px;color:var(--muted);font-weight:600}
+.air-row{
+  display:grid;grid-template-columns:90px 1fr 62px 82px;gap:10px;align-items:center;
+  min-height:76px;padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer
+}
+.air-row:hover,.air-row.active{background:#0e2535}
+.logo-card{
+  width:86px;height:48px;border-radius:5px;background:#fff;display:flex;align-items:center;
+  justify-content:center;padding:5px;overflow:hidden
+}
+.logo-card img,.logo-card svg{width:100%;height:100%;object-fit:contain;display:block}
+.logo-text{font-size:13px;font-weight:900;color:#111;text-align:center}
+.call{font-size:clamp(17px,1.35vw,22px);font-weight:900}
+.operator{font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-label{font-size:9px;color:var(--muted);letter-spacing:.8px}
+.mini-value{font-size:clamp(13px,1.05vw,17px);font-weight:800;margin-top:4px}
+.dist{color:var(--green);font-size:clamp(14px,1.2vw,20px);font-weight:900;text-align:right;margin-top:5px}
+.selected-head{display:grid;grid-template-columns:96px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+.selected-call{font-size:clamp(25px,2.7vw,42px);font-weight:900}
+.selected-op{font-size:clamp(13px,1.2vw,19px);font-weight:900;color:var(--brand);margin-top:4px}
+.type-code{text-align:right;font-size:clamp(20px,1.9vw,29px);font-weight:900}
+.type-name{text-align:right;color:var(--muted);font-size:12px;margin-top:4px}
+.photo-wrap{position:relative;background:#06101a;min-height:280px;overflow:hidden}
+.photo-wrap img{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:cover;display:block;background:#06101a}
+.photo-fallback{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,#0b2233,#06101a);padding:30px;text-align:center}
+.photo-fallback .caption{color:var(--muted);font-weight:900;font-size:18px}
+.photo-fallback .sub{color:#6f8293;font-size:12px;margin-top:8px}
+.photo-credit{position:absolute;z-index:3;right:8px;bottom:8px;background:rgba(0,0,0,.72);padding:4px 7px;border-radius:4px;font-size:10px}
+.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.detail{padding:11px 13px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.detail:nth-child(3n){border-right:0}
+.detail-label{font-size:10px;color:var(--muted);letter-spacing:.8px}
+.detail-value{font-size:clamp(15px,1.25vw,21px);font-weight:900;margin-top:6px}
+.route{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:11px 13px}
+.route-code{font-size:clamp(20px,1.9vw,29px);font-weight:900}
+.route-name{font-size:11px;color:var(--muted);margin-top:3px}
+.route-mid{color:var(--amber);font-size:26px;padding:0 12px}
+.route-right{text-align:right}
+#map{height:455px;background:#06101a}
+.leaflet-container{background:#06101a}
+.plane-marker{font-size:22px;color:var(--amber);text-shadow:0 0 5px #000}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr)}
+.summary{padding:15px 10px;text-align:center;border-right:1px solid var(--line)}
+.summary:last-child{border-right:0}
+.summary .big{font-size:clamp(22px,2vw,34px);font-weight:900;margin-top:6px}
+.summary .small{font-size:10px;color:var(--muted);margin-top:4px}
+.weather-panel{display:grid;grid-template-columns:1fr 1.2fr;gap:10px;padding:16px}
+.weather-main{display:flex;align-items:center;gap:12px}
+.weather-icon{font-size:44px}
+.weather-temp{font-size:clamp(30px,2.8vw,44px);font-weight:900}
+.weather-detail{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:12px}
+.radius-grid{display:grid;grid-template-columns:repeat(4,1fr);padding:14px}
+.radius-item{text-align:center;border-right:1px solid var(--line)}
+.radius-item:last-child{border-right:0}
+.radius-item strong{display:block;font-size:23px;margin-top:5px}
+footer{display:flex;justify-content:center;gap:28px;color:var(--muted);font-size:12px;padding:3px 0}
+.empty{padding:28px;color:var(--muted);text-align:center}
+@media(max-width:1100px){
+  .dashboard{grid-template-columns:1fr 1fr}
+  .right-col{grid-column:1/-1;grid-template-columns:1fr 1fr}
+  #map{height:380px}
+}
+@media(max-width:760px){
+  .app{padding:7px}
+  header{grid-template-columns:1fr 1fr}.title{grid-column:1/-1;grid-row:1}.time{grid-row:2}.status{grid-row:2}
+  .dashboard{grid-template-columns:1fr}
+  .center-col{order:-1}.right-col{grid-column:auto;grid-template-columns:1fr}
+  .air-row{grid-template-columns:82px 1fr 62px}.air-row .alt-col{display:none}
+  .detail-grid{grid-template-columns:1fr 1fr}.detail:nth-child(3n){border-right:1px solid var(--line)}.detail:nth-child(2n){border-right:0}
+  .summary-grid{grid-template-columns:1fr 1fr}.summary:nth-child(2){border-right:0}
+  .weather-panel{grid-template-columns:1fr}
+  footer{flex-direction:column;gap:5px;text-align:center}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div>
+    <div class="time" id="clock">--:--:--</div>
+    <div class="date" id="date">--</div>
+    <div class="weather-top"><span id="weatherIconTop">☁️</span><span id="weatherTop">Loading weather…</span></div>
+  </div>
+  <div class="title"><h1>LIVE LOCAL AIR TRAFFIC</h1><p>NEAR BRACKNELL · RG12 0SF</p></div>
+  <div class="status"><div id="connection" class="ok">● CONNECTING · V6</div><small id="updated">Waiting for live data</small></div>
+</header>
+
+<main class="dashboard">
+  <div class="col left-col">
+    <section class="panel">
+      <div class="panel-title"><span>✈ AIRCRAFT NEARBY</span><span id="count">SEARCHING</span></div>
+      <div id="list"><div class="empty">Loading live aircraft…</div></div>
+    </section>
+    <section class="panel">
+      <div class="panel-title"><span>WEATHER · BRACKNELL</span><span>LIVE</span></div>
+      <div class="weather-panel">
+        <div class="weather-main"><div class="weather-icon" id="weatherIcon">☁️</div><div><div class="weather-temp" id="weatherTemp">--°C</div><div id="weatherText" style="color:var(--muted)">Loading</div></div></div>
+        <div class="weather-detail">
+          <span>WIND</span><strong id="weatherWind">--</strong>
+          <span>VISIBILITY</span><strong id="weatherVis">--</strong>
+          <span>PRESSURE</span><strong id="weatherPressure">--</strong>
+          <span>HUMIDITY</span><strong id="weatherHumidity">--</strong>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="col center-col">
+    <section class="panel">
+      <div class="panel-title"><span>◎ SELECTED AIRCRAFT</span><span id="selectedStatus">LIVE · ROUTE LOOKUP</span></div>
+      <div class="selected-head">
+        <div class="logo-card" id="mainLogo"><div class="logo-text">--</div></div>
+        <div><div class="selected-call" id="call">SEARCHING</div><div class="selected-op" id="operator">Finding nearest aircraft</div></div>
+        <div><div class="type-code" id="typeCode">--</div><div class="type-name" id="typeName">Aircraft type unavailable</div></div>
+      </div>
+      <div class="photo-wrap">
+        <div class="photo-fallback" id="fallback"><div class="caption">Searching available aircraft photo sources</div><div class="sub">Exact registration first, then airline and aircraft type</div></div>
+        <img id="photo" alt="Selected aircraft photograph" hidden>
+        <div class="photo-credit" id="credit" hidden></div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail"><div class="detail-label">ALTITUDE</div><div class="detail-value" id="altitude">--</div></div>
+        <div class="detail"><div class="detail-label">SPEED</div><div class="detail-value" id="speed">--</div></div>
+        <div class="detail"><div class="detail-label">HEADING</div><div class="detail-value" id="heading">--</div></div>
+        <div class="detail"><div class="detail-label">DISTANCE</div><div class="detail-value" id="distance">--</div></div>
+        <div class="detail"><div class="detail-label">VERTICAL RATE</div><div class="detail-value" id="vertical">--</div></div>
+        <div class="detail"><div class="detail-label">SQUAWK</div><div class="detail-value" id="squawk">--</div></div>
+        <div class="detail"><div class="detail-label">REGISTRATION</div><div class="detail-value" id="registration">--</div></div>
+        <div class="detail"><div class="detail-label">MODE-S HEX</div><div class="detail-value" id="hex">--</div></div>
+        <div class="detail"><div class="detail-label">AIRCRAFT</div><div class="detail-value" id="aircraftFull">--</div></div>
+      </div>
+      <div class="route">
+        <div>
+          <div class="route-code" id="originCode">---</div>
+          <div class="route-name" id="originName">ROUTE UNAVAILABLE</div>
+        </div>
+        <div class="route-mid">····· ✈ ·····</div>
+        <div class="route-right">
+          <div class="route-code" id="destinationCode">---</div>
+          <div class="route-name" id="destinationName">ROUTE UNAVAILABLE</div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-title"><span>ABOUT 34.5 MILE RADIUS</span><span>LIVE AREA</span></div>
+      <div class="radius-grid">
+        <div class="radius-item">AIRPORTS<strong>5</strong></div>
+        <div class="radius-item">HELIPORTS<strong>2</strong></div>
+        <div class="radius-item">NDB / VOR<strong>3</strong></div>
+        <div class="radius-item">MILITARY<strong>0</strong></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="col right-col">
+    <section class="panel">
+      <div class="panel-title"><span>⌖ LIVE TRAFFIC MAP</span><span>34.5 MILES</span></div>
+      <div id="map"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-title"><span>AIR TRAFFIC SUMMARY</span><span>LIVE</span></div>
+      <div class="summary-grid">
+        <div class="summary"><div class="mini-label">TOTAL AIRCRAFT</div><div class="big" id="total">--</div><div class="small">WITHIN 34.5 MILES</div></div>
+        <div class="summary"><div class="mini-label">HIGHEST ALTITUDE</div><div class="big" id="highest">--</div><div class="small" id="highestCall">--</div></div>
+        <div class="summary"><div class="mini-label">AVERAGE SPEED</div><div class="big" id="averageSpeed">--</div><div class="small">GROUND SPEED</div></div>
+        <div class="summary"><div class="mini-label">NEAREST</div><div class="big" id="nearest">--</div><div class="small">FROM BRACKNELL</div></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <span>◉ LIVE SOURCES: AIRPLANES.LIVE + ADSB.LOL</span>
+  <span>▣ PHOTOS & ROUTES: ADSBDB / PLANESPOTTERS</span>
+  <span>MAP: OPENSTREETMAP</span>
+  <span>WEATHER: OPEN-METEO</span>
+</footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const HOME_LAT=51.3931,HOME_LON=-0.7318,RADIUS=30;
+const API=`https://api.airplanes.live/v2/point/${HOME_LAT}/${HOME_LON}/${RADIUS}`;
+const $=id=>document.getElementById(id);
+let aircraft=[],selected=null,photoToken=0,map,markers=[];
+const enrichmentCache=new Map();
+let selectedLookupKey=null;
+let lastGoodAircraft=[];
+let liveSourceName="";
+
+const OPS={
+ BAW:{name:"British Airways",brand:"#2b6da8",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/British_Airways_Logo.svg"},
+ SHT:{name:"British Airways",brand:"#2b6da8",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/British_Airways_Logo.svg"},
+ VIR:{name:"Virgin Atlantic",brand:"#d71920",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Virgin_Atlantic_logo.svg"},
+ EZY:{name:"easyJet",brand:"#ff6600",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/EasyJet_logo.svg"},
+ RYR:{name:"Ryanair",brand:"#f5c400",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Ryanair_logo.svg"},
+ UAE:{name:"Emirates",brand:"#d71920",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Emirates_logo.svg"},
+ QTR:{name:"Qatar Airways",brand:"#6b1238",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Qatar_Airways_Logo.svg"},
+ DLH:{name:"Lufthansa",brand:"#f9ba00",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Lufthansa_Logo_2018.svg"},
+ KLM:{name:"KLM",brand:"#00a1e4",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/KLM_logo.svg"},
+ AFR:{name:"Air France",brand:"#e32636",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Air_France_Logo.svg"},
+ EIN:{name:"Aer Lingus",brand:"#008374",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Aer_Lingus_logo_2019.svg"},
+ THY:{name:"Turkish Airlines",brand:"#c8102e",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Turkish_Airlines_logo_2019_compact.svg"},
+ WZZ:{name:"Wizz Air",brand:"#c6007e",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Wizz_Air_logo.svg"},
+ ACA:{name:"Air Canada",brand:"#d8292f",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Air_Canada_Logo.svg"},
+ AAL:{name:"American Airlines",brand:"#d9272e",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/American_Airlines_logo_2013.svg"},
+ UAL:{name:"United Airlines",brand:"#005daa",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/United_Airlines_Logo.svg"},
+ DAL:{name:"Delta Air Lines",brand:"#c8102e",logo:"https://commons.wikimedia.org/wiki/Special:FilePath/Delta_logo.svg"}
+};
+const TYPES={A20N:"Airbus A320neo",A21N:"Airbus A321neo",A319:"Airbus A319",A320:"Airbus A320",A321:"Airbus A321",A359:"Airbus A350-900",A35K:"Airbus A350-1000",A388:"Airbus A380-800",B38M:"Boeing 737 MAX 8",B738:"Boeing 737-800",B744:"Boeing 747-400",B748:"Boeing 747-8",B772:"Boeing 777-200",B77W:"Boeing 777-300ER",B788:"Boeing 787-8",B789:"Boeing 787-9",B78X:"Boeing 787-10",E190:"Embraer E190",E195:"Embraer E195",AT76:"ATR 72-600",P28A:"Piper PA-28",FA8X:"Dassault Falcon 8X",CL30:"Bombardier Challenger 300",C172:"Cessna 172"};
+
+function clean(v){return v===null||v===undefined||String(v).trim()===""?"--":String(v).trim()}
+function cs(a){return clean(a.flight).replace(/\s+/g,"")}
+function op(a){const p=cs(a).toUpperCase().slice(0,3);return OPS[p]||{name:a.ownOp||a.desc||"Private or unidentified operator",brand:"#62b7ff",logo:null}}
+function tname(c){return TYPES[clean(c).toUpperCase()]||clean(c)}
+function initials(n){return n.split(/\s+/).map(x=>x[0]).join("").slice(0,3).toUpperCase()}
+function nm(a,b,c,d){const r=3440.065,k=Math.PI/180,x=(c-a)*k,y=(d-b)*k,z=Math.sin(x/2)**2+Math.cos(a*k)*Math.cos(c*k)*Math.sin(y/2)**2;return r*2*Math.atan2(Math.sqrt(z),Math.sqrt(1-z))}
+function alt(v){if(v==="ground")return"GROUND";const n=Number(v);return Number.isFinite(n)?`${Math.round(n).toLocaleString("en-GB")} ft`:"--"}
+function spd(v){const n=Number(v);return Number.isFinite(n)?`${Math.round(n*1.15078)} mph`:"--"}
+function milesFromNm(v){return Number(v)*1.15078}
+function milesText(v){return `${milesFromNm(v).toFixed(1)} mi`}
+function hdg(v){const n=Number(v);return Number.isFinite(n)?`${Math.round(n)}°`:"--"}
+function vrt(v){const n=Number(v);return Number.isFinite(n)?`${n>0?"+":""}${Math.round(n).toLocaleString("en-GB")} ft/min`:"--"}
+function proxy(url,w=1200){
+ return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=${w}&fit=cover&output=jpg`;
+}
+
+function logoMarkup(o){
+ const n=o.name;
+ if(n==="British Airways")return `<svg viewBox="0 0 240 90" role="img" aria-label="British Airways"><rect width="240" height="90" rx="8" fill="#fff"/><path d="M18 28h95l50 16-50 17H18z" fill="#173f7a"/><path d="M108 28h112l-53 16z" fill="#d71920"/><text x="20" y="79" font-size="18" font-family="Arial" font-weight="700" fill="#173f7a">BRITISH AIRWAYS</text></svg>`;
+ if(n==="Virgin Atlantic")return `<svg viewBox="0 0 240 90" role="img" aria-label="Virgin Atlantic"><rect width="240" height="90" rx="8" fill="#fff"/><text x="14" y="55" font-size="29" font-family="Arial" font-style="italic" fill="#5b2a7b">virgin atlantic</text><rect x="192" y="18" width="32" height="32" rx="4" fill="#d71920" transform="rotate(-12 208 34)"/><text x="198" y="39" font-size="12" fill="#fff">VA</text></svg>`;
+ if(n==="easyJet")return `<svg viewBox="0 0 240 90" role="img" aria-label="easyJet"><rect width="240" height="90" rx="8" fill="#ff6600"/><text x="28" y="60" font-size="42" font-family="Arial" font-weight="700" fill="#fff">easyJet</text></svg>`;
+ if(n==="Ryanair")return `<svg viewBox="0 0 240 90" role="img" aria-label="Ryanair"><rect width="240" height="90" rx="8" fill="#123b7a"/><path d="M25 66c22-15 22-39 20-47 10 9 17 23 17 37l21-9-19 27z" fill="#f5c400"/><text x="72" y="58" font-size="31" font-family="Arial" font-weight="800" fill="#f5c400">RYANAIR</text></svg>`;
+ if(n==="Emirates")return `<svg viewBox="0 0 240 90" role="img" aria-label="Emirates"><rect width="240" height="90" rx="8" fill="#fff"/><text x="24" y="59" font-size="38" font-family="Georgia" font-weight="700" fill="#d71920">Emirates</text></svg>`;
+ if(n==="Qatar Airways")return `<svg viewBox="0 0 240 90" role="img" aria-label="Qatar Airways"><rect width="240" height="90" rx="8" fill="#fff"/><text x="18" y="56" font-size="31" font-family="Arial" font-weight="700" fill="#6b1238">QATAR</text><text x="139" y="56" font-size="17" font-family="Arial" fill="#6b1238">AIRWAYS</text></svg>`;
+ if(n==="Aer Lingus")return `<svg viewBox="0 0 240 90" role="img" aria-label="Aer Lingus"><rect width="240" height="90" rx="8" fill="#fff"/><text x="16" y="56" font-size="30" font-family="Arial" fill="#008374">Aer Lingus</text><text x="185" y="62" font-size="43" fill="#58a618">♣</text></svg>`;
+ if(n==="Lufthansa")return `<svg viewBox="0 0 240 90" role="img" aria-label="Lufthansa"><rect width="240" height="90" rx="8" fill="#071f49"/><circle cx="42" cy="45" r="25" fill="#f9ba00"/><text x="76" y="56" font-size="29" font-family="Arial" font-weight="700" fill="#fff">Lufthansa</text></svg>`;
+ if(n==="KLM")return `<svg viewBox="0 0 240 90" role="img" aria-label="KLM"><rect width="240" height="90" rx="8" fill="#fff"/><text x="66" y="60" font-size="45" font-family="Arial" font-weight="800" fill="#00a1e4">KLM</text><text x="104" y="28" font-size="23" fill="#00a1e4">♛</text></svg>`;
+ if(n==="Air France")return `<svg viewBox="0 0 240 90" role="img" aria-label="Air France"><rect width="240" height="90" rx="8" fill="#fff"/><text x="18" y="56" font-size="30" font-family="Arial" font-weight="700" fill="#163f7a">AIR FRANCE</text><path d="M200 26l22 18-22 18z" fill="#e32636"/></svg>`;
+ if(n==="Turkish Airlines")return `<svg viewBox="0 0 240 90" role="img" aria-label="Turkish Airlines"><rect width="240" height="90" rx="8" fill="#fff"/><circle cx="42" cy="45" r="27" fill="#c8102e"/><path d="M30 45c11-13 24-10 31-2-12-4-18 2-22 11z" fill="#fff"/><text x="78" y="39" font-size="20" font-family="Arial" font-weight="700" fill="#111">TURKISH</text><text x="78" y="61" font-size="20" font-family="Arial" font-weight="700" fill="#111">AIRLINES</text></svg>`;
+ const safe=n.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+ return `<svg viewBox="0 0 240 90" role="img" aria-label="${safe}"><rect width="240" height="90" rx="8" fill="#fff"/><rect x="0" y="0" width="12" height="90" fill="${o.brand||"#173f7a"}"/><text x="126" y="52" text-anchor="middle" font-size="${safe.length>18?18:23}" font-family="Arial" font-weight="800" fill="#111">${safe}</text></svg>`;
+}
+function setLogo(el,o){el.innerHTML=logoMarkup(o)}
+
+function row(item,i){
+ const a=item.ac,o=op(a),call=cs(a);
+ return `<div class="air-row ${selected&&selected.ac.hex===a.hex?"active":""}" data-i="${i}">
+   <div class="logo-card" data-logo="${i}"><div class="logo-text">${initials(o.name)}</div></div>
+   <div><div class="call">${call==="--"?clean(a.r):call}</div><div class="operator">${o.name}</div></div>
+   <div><div class="mini-label">TYPE</div><div class="mini-value">${clean(a.t)}</div></div>
+   <div class="alt-col"><div class="mini-label">ALTITUDE</div><div class="mini-value">${alt(a.alt_baro??a.alt_geom)}</div><div class="dist">${milesText(item.distance)}</div></div>
+ </div>`;
+}
+function renderList(){
+ const l=$("list");
+ if(!aircraft.length){l.innerHTML='<div class="empty">No positioned aircraft detected within 34.5 MILES.</div>';return}
+ l.innerHTML=aircraft.slice(0,8).map(row).join("");
+ aircraft.slice(0,8).forEach((x,i)=>setLogo(l.querySelector(`[data-logo="${i}"]`),op(x.ac)));
+ l.querySelectorAll(".air-row").forEach(r=>r.addEventListener("click",()=>selectAircraft(aircraft[Number(r.dataset.i)])));
+}
+
+
+async function fetchJsonWithFallback(urls,timeoutMs=9000){
+  let lastError=null;
+  for(const url of urls){
+    try{
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),timeoutMs);
+      const response=await fetch(url,{cache:"no-store",signal:controller.signal});
+      clearTimeout(timer);
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    }catch(error){
+      lastError=error;
+    }
+  }
+  throw lastError||new Error("All data sources failed");
+}
+
+function proxyJsonUrl(url){
+  return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+}
+
+function setRouteUnavailable(label="ROUTE UNAVAILABLE"){
+  $("originCode").textContent="---";
+  $("originName").textContent=label;
+  $("destinationCode").textContent="---";
+  $("destinationName").textContent=label;
+}
+
+function airportCode(airport){
+  return clean(
+    airport?.iata_code || airport?.iata ||
+    airport?.icao_code || airport?.icao ||
+    airport?.gps_code
+  ).toUpperCase();
+}
+
+function airportName(airport){
+  return clean(airport?.name)!=="--"
+    ? clean(airport.name)
+    : clean(airport?.municipality)!=="--"
+      ? clean(airport.municipality)
+      : "ROUTE UNAVAILABLE";
+}
+
+function showRoute(route){
+  const origin=route?.origin;
+  const destination=route?.destination;
+  if(!origin||!destination){
+    setRouteUnavailable();
+    $("selectedStatus").textContent="LIVE · ROUTE UNAVAILABLE";
+    return;
+  }
+  $("originCode").textContent=airportCode(origin);
+  $("originName").textContent=airportName(origin);
+  $("destinationCode").textContent=airportCode(destination);
+  $("destinationName").textContent=airportName(destination);
+  $("selectedStatus").textContent="LIVE · ROUTE FOUND";
+}
+
+function showPhoto(url,creditText){
+  const img=$("photo");
+  if(!url)return false;
+  img.hidden=true;
+  $("credit").hidden=true;
+  $("fallback").style.display="flex";
+
+  img.onload=()=>{
+    $("fallback").style.display="none";
+    img.hidden=false;
+    $("credit").textContent=creditText;
+    $("credit").hidden=false;
+  };
+  img.onerror=()=>{
+    img.hidden=true;
+    $("fallback").style.display="flex";
+    $("credit").hidden=true;
+  };
+  img.referrerPolicy="no-referrer";
+  img.src=url;
+  return true;
+}
+
+async function enrichAircraft(a){
+  const key=`${clean(a.hex)}|${clean(a.r)}|${cs(a)}`;
+  if(enrichmentCache.has(key)){
+    const cached=enrichmentCache.get(key);
+    showRoute(cached.route);
+    if(cached.photo)showPhoto(cached.photo,cached.credit);
+    return;
+  }
+
+  setRouteUnavailable("SEARCHING ROUTE…");
+  $("selectedStatus").textContent="LIVE · LOOKING UP DETAILS";
+  $("photo").hidden=true;
+  $("credit").hidden=true;
+  $("fallback").style.display="flex";
+  $("fallback").innerHTML='<div class="caption">Searching aircraft photograph</div><div class="sub">Registration and aircraft databases</div>';
+
+  const hex=clean(a.hex).toLowerCase();
+  const call=cs(a).toUpperCase();
+  let aircraftRecord=null;
+  let routeRecord=null;
+
+  if(hex!=="--"){
+    const aircraftUrl=`https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(hex)}`;
+    try{
+      const data=await fetchJsonWithFallback([
+        aircraftUrl,
+        proxyJsonUrl(aircraftUrl)
+      ]);
+      aircraftRecord=data?.response?.aircraft||data?.aircraft||null;
+    }catch(e){}
+  }
+
+  if(call!=="--"&&call.length>=3){
+    const routeUrl=`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(call)}`;
+    try{
+      const data=await fetchJsonWithFallback([
+        routeUrl,
+        proxyJsonUrl(routeUrl)
+      ]);
+      routeRecord=data?.response?.flightroute||data?.flightroute||data?.response?.route||data?.route||null;
+    }catch(e){}
+  }
+
+  let photo=
+    aircraftRecord?.url_photo ||
+    aircraftRecord?.url_photo_thumbnail ||
+    null;
+
+  let credit=photo
+    ? "Aircraft photograph · aircraft database / Planespotters.net"
+    : "";
+
+  if(!photo){
+    $("fallback").innerHTML='<div class="caption">No public photo found for this aircraft</div><div class="sub">Registration and live flight information remain available</div>';
+  }else{
+    showPhoto(photo,credit);
+  }
+
+  showRoute(routeRecord);
+  enrichmentCache.set(key,{route:routeRecord,photo,credit});
+}
+
+function selectAircraft(item){
+ selected=item;const a=item.ac,o=op(a),call=cs(a),type=clean(a.t);
+ document.documentElement.style.setProperty("--brand",o.brand);
+ setLogo($("mainLogo"),o);
+ $("call").textContent=call==="--"?clean(a.r):call;$("operator").textContent=o.name;$("operator").style.color=o.brand;
+ $("typeCode").textContent=type;$("typeName").textContent=tname(type);
+ $("altitude").textContent=alt(a.alt_baro??a.alt_geom);$("speed").textContent=spd(a.gs);$("heading").textContent=hdg(a.track??a.true_heading??a.mag_heading);
+ $("distance").textContent=`${milesText(item.distance)}`;$("routeDist").textContent=`${milesText(item.distance)}`;
+ $("vertical").textContent=vrt(a.baro_rate??a.geom_rate);$("squawk").textContent=clean(a.squawk);$("registration").textContent=clean(a.r);
+ $("hex").textContent=clean(a.hex).toUpperCase();$("aircraftFull").textContent=tname(type);
+ const lookupKey=`${clean(a.hex)}|${clean(a.r)}|${cs(a)}`;
+ if(selectedLookupKey!==lookupKey){
+   selectedLookupKey=lookupKey;
+   enrichAircraft(a);
+ }
+ renderList();
+}
+
+function initMap(){
+ map=L.map("map",{zoomControl:true}).setView([HOME_LAT,HOME_LON],9);
+ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(map);
+ L.circleMarker([HOME_LAT,HOME_LON],{radius:8,color:"#fff",weight:2,fillColor:"#2684ff",fillOpacity:1}).addTo(map).bindTooltip("Bracknell");
+}
+function updateMap(){
+ markers.forEach(m=>map.removeLayer(m));markers=[];
+ aircraft.slice(0,50).forEach(x=>{
+  const a=x.ac,icon=L.divIcon({className:"",html:`<div class="plane-marker" style="transform:rotate(${Number(a.track)||0}deg)">✈</div>`,iconSize:[24,24],iconAnchor:[12,12]});
+  const m=L.marker([Number(a.lat),Number(a.lon)],{icon}).addTo(map).bindTooltip(`${cs(a)} · ${alt(a.alt_baro??a.alt_geom)}`);
+  markers.push(m);
+ });
+}
+function updateSummary(){
+ $("total").textContent=aircraft.length;
+ const highest=aircraft.filter(x=>Number.isFinite(Number(x.ac.alt_baro))).sort((a,b)=>Number(b.ac.alt_baro)-Number(a.ac.alt_baro))[0];
+ $("highest").textContent=highest?alt(highest.ac.alt_baro):"--";$("highestCall").textContent=highest?cs(highest.ac):"--";
+ const speeds=aircraft.map(x=>Number(x.ac.gs)).filter(Number.isFinite);$("averageSpeed").textContent=speeds.length?`${Math.round(speeds.reduce((a,b)=>a+b,0)/speeds.length)} kt`:"--";
+ $("nearest").textContent=aircraft[0]?milesText(aircraft[0].distance):"--";
+}
+async function refresh(){
+ try{
+  const directAirplanes=`https://api.airplanes.live/v2/point/${HOME_LAT}/${HOME_LON}/${RADIUS}`;
+  const directAdsbLol=`https://api.adsb.lol/v2/point/${HOME_LAT}/${HOME_LON}/${RADIUS}`;
+  let d=null;
+
+  const sources=[
+    {name:"Airplanes.live",url:directAirplanes},
+    {name:"ADSB.lol",url:directAdsbLol},
+    {name:"Airplanes.live proxy",url:proxyJsonUrl(directAirplanes)},
+    {name:"ADSB.lol proxy",url:proxyJsonUrl(directAdsbLol)}
+  ];
+
+  let lastError=null;
+  for(const source of sources){
+    try{
+      d=await fetchJsonWithFallback([source.url],8000);
+      if(Array.isArray(d?.ac)){
+        liveSourceName=source.name;
+        break;
+      }
+    }catch(error){
+      lastError=error;
+    }
+  }
+  if(!d||!Array.isArray(d.ac))throw lastError||new Error("No live aircraft response");
+
+  aircraft=(d.ac||[])
+    .filter(a=>Number.isFinite(Number(a.lat))&&Number.isFinite(Number(a.lon)))
+    .map(a=>({ac:a,distance:nm(HOME_LAT,HOME_LON,Number(a.lat),Number(a.lon))}))
+    .filter(x=>x.distance<=RADIUS)
+    .sort((a,b)=>a.distance-b.distance);
+
+  lastGoodAircraft=aircraft;
+  $("connection").className="ok";
+  $("connection").textContent=`● LIVE DATA CONNECTED · ${liveSourceName}`;
+  $("updated").textContent=`Last updated ${new Date().toLocaleTimeString("en-GB")}`;
+  $("count").textContent=`${aircraft.length} AIRCRAFT WITHIN 34.5 MILES`;
+
+  const keep=selected&&aircraft.find(x=>x.ac.hex===selected.ac.hex);
+  if(keep){
+    selected=keep;
+    selectAircraft(keep);
+  }else if(aircraft[0]){
+    selectAircraft(aircraft[0]);
+  }else{
+    renderList();
+  }
+  updateMap();
+  updateSummary();
+ }catch(e){
+  if(lastGoodAircraft.length){
+    aircraft=lastGoodAircraft;
+    $("connection").className="bad";
+    $("connection").textContent="● LIVE FEED TEMPORARILY UNAVAILABLE";
+    $("updated").textContent="Showing last successful update · retrying";
+    renderList();
+    updateMap();
+    updateSummary();
+  }else{
+    $("connection").className="bad";
+    $("connection").textContent="● ALL LIVE SOURCES UNAVAILABLE";
+    $("updated").textContent="Retrying automatically";
+  }
+ }
+}
+async function weather(){
+ try{
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${HOME_LAT}&longitude=${HOME_LON}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,surface_pressure,wind_speed_10m,wind_direction_10m&hourly=visibility&timezone=Europe%2FLondon&forecast_days=1`;
+  const r=await fetch(u);const d=await r.json(),c=d.current;
+  const icons={0:"☀️",1:"🌤️",2:"⛅",3:"☁️",45:"🌫️",48:"🌫️",51:"🌦️",53:"🌦️",55:"🌧️",61:"🌧️",63:"🌧️",65:"🌧️",71:"🌨️",73:"🌨️",75:"🌨️",80:"🌦️",81:"🌧️",82:"🌧️",95:"⛈️"};
+  const texts={0:"Clear",1:"Mainly clear",2:"Partly cloudy",3:"Cloudy",45:"Fog",48:"Fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Rain showers",81:"Rain showers",82:"Heavy showers",95:"Thunderstorms"};
+  const icon=icons[c.weather_code]||"☁️",text=texts[c.weather_code]||"Current conditions";
+  $("weatherIcon").textContent=icon;$("weatherIconTop").textContent=icon;$("weatherTemp").textContent=`${Math.round(c.temperature_2m)}°C`;$("weatherText").textContent=text;$("weatherTop").textContent=`${Math.round(c.temperature_2m)}°C · ${text}`;
+  $("weatherWind").textContent=`${Math.round(c.wind_direction_10m)}° ${Math.round(c.wind_speed_10m)} km/h`;$("weatherPressure").textContent=`${Math.round(c.surface_pressure)} hPa`;$("weatherHumidity").textContent=`${c.relative_humidity_2m}%`;
+  $("weatherVis").textContent="Live local";
+ }catch(e){}
+}
+function tick(){const d=new Date();$("clock").textContent=d.toLocaleTimeString("en-GB");$("date").textContent=d.toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}
+tick();setInterval(tick,1000);initMap();refresh();weather();setInterval(refresh,10000);setInterval(weather,600000);
+</script>
+</body>
+</html>
